@@ -1,66 +1,104 @@
 import connectDB from '@/lib/db/mongodb';
 import User from '@/lib/db/models/user';
 import bcrypt from 'bcryptjs';
-import { generateToken } from '@/lib/auth/jwt';
+import { NextRequest, NextResponse } from 'next/server';
 
-export async function POST(request: Request) {
+export async function POST(request: NextRequest) {
   try {
-    const { email, password, firstName, lastName } = await request.json();
+    const body = await request.json();
+    const { firstName, lastName, email, password } = body;
 
-    if (!email || !password || !firstName || !lastName) {
-      return Response.json(
-        { message: 'All fields are required' },
+    console.log("📝 Registration attempt:", { firstName, lastName, email });
+
+    // Validation
+    if (!firstName || !lastName || !email || !password) {
+      return NextResponse.json(
+        { error: 'All fields are required' },
         { status: 400 }
       );
     }
 
+    // Email validation
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email)) {
+      return NextResponse.json(
+        { error: 'Invalid email format' },
+        { status: 400 }
+      );
+    }
+
+    // Password length check
+    if (password.length < 6) {
+      return NextResponse.json(
+        { error: 'Password must be at least 6 characters' },
+        { status: 400 }
+      );
+    }
+
+    // Connect to database
     await connectDB();
+    console.log("✅ Database connected");
 
-    const existingUser = await User.findOne({ email });
+    // Check if user already exists
+    const existingUser = await User.findOne({ email: email.toLowerCase() });
     if (existingUser) {
-      return Response.json(
-        { message: 'Email already registered' },
+      return NextResponse.json(
+        { error: 'User with this email already exists' },
         { status: 400 }
       );
     }
 
+    // Hash password
     const hashedPassword = await bcrypt.hash(password, 10);
+    console.log("🔐 Password hashed");
 
-    const user = new User({
-      email,
+    // Create user
+    const newUser = new User({
+      name: `${firstName} ${lastName}`,
+      email: email.toLowerCase(),
       password: hashedPassword,
-      firstName,
-      lastName,
+      preferences: {
+        theme: 'light',
+        notifications: true,
+        publicProfile: false
+      },
+      privacySettings: {
+        showOnPublicGallery: false,
+        albumsPrivateByDefault: true
+      }
     });
 
-    await user.save();
+    await newUser.save();
+    console.log("✅ User created:", newUser._id);
 
-    const token = generateToken({
-      userId: user._id.toString(),
-      email: user.email,
-      firstName: user.firstName,
-      lastName: user.lastName,
-    });
-
-    return Response.json(
+    return NextResponse.json(
       {
+        success: true,
         message: 'User registered successfully',
-        token,
         user: {
-          id: user._id,
-          email: user.email,
-          firstName: user.firstName,
-          lastName: user.lastName,
-        },
+          id: newUser._id,
+          name: newUser.name,
+          email: newUser.email
+        }
       },
       { status: 201 }
     );
-  } catch (error) {
-    console.error('Registration error:', error);
-    return Response.json(
-      {
-        message: 'Error registering user',
-        error: error instanceof Error ? error.message : 'Unknown error',
+
+  } catch (error: any) {
+    console.error('❌ Registration error:', error);
+    
+    // Handle duplicate key error
+    if (error.code === 11000) {
+      return NextResponse.json(
+        { error: 'User with this email already exists' },
+        { status: 400 }
+      );
+    }
+
+    return NextResponse.json(
+      { 
+        error: 'Error registering user',
+        details: error.message 
       },
       { status: 500 }
     );

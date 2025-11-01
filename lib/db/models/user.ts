@@ -9,6 +9,7 @@ const userSchema = new mongoose.Schema({
     type: String,
     required: true,
     unique: true,
+    lowercase: true,
   },
   password: {
     type: String,
@@ -16,29 +17,16 @@ const userSchema = new mongoose.Schema({
   },
   avatar: {
     type: String,
-    default: null,
+    default: '',
   },
   bio: {
     type: String,
     default: '',
   },
-  location: {
-    type: String,
-    default: '',
-  },
   socialLinks: {
-    instagram: {
-      type: String,
-      default: '',
-    },
-    facebook: {
-      type: String,
-      default: '',
-    },
-    website: {
-      type: String,
-      default: '',
-    },
+    instagram: String,
+    facebook: String,
+    website: String,
   },
   preferences: {
     theme: {
@@ -71,4 +59,6 @@ const userSchema = new mongoose.Schema({
   },
 });
 
-export default mongoose.models.User || mongoose.model('User', userSchema);
+const User = mongoose.models.User || mongoose.model('User', userSchema);
+
+export default User;
